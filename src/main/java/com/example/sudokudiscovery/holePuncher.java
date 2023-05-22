@@ -24,8 +24,8 @@ public class holePuncher implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         clientmap = new HashMap<>();
-        serverSocket = new ServerSocket(5000);
-        System.out.println("ServerSocket started on Port 5000");
+        serverSocket = new ServerSocket(Integer.parseInt(System.getenv("PORT")));
+        System.out.println("ServerSocket started on Port " + System.getenv("PORT"));
         client = serverSocket.accept();
         System.out.println("RemoteSocketAddress: " + client.getRemoteSocketAddress());
         client.close();
