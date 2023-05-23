@@ -1,33 +1,29 @@
 package com.example.sudokudiscovery;
 
-import org.javatuples.Triplet;
+import lombok.extern.log4j.Log4j2;
+import org.javatuples.Quartet;
 
-import java.io.*;
-import java.net.DatagramPacket;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.UUID;
 
+import static com.example.sudokudiscovery.holePuncher.clientmap;
+
+@Log4j2
 public class TcpHandlingThread implements Runnable{
     Socket client;
     BufferedReader in;
     BufferedOutputStream out;
-    Map<UUID, Triplet<String,UUID,DatagramPacket>> clientmap;
+
     UUID uuid;
     String otherClientIP;
     String otherClientPort;
-    TcpHandlingThread(Socket client, BufferedOutputStream out, BufferedReader in,Map<UUID,Triplet<String,UUID,DatagramPacket>> clientmap) {
+    TcpHandlingThread(Socket client, BufferedOutputStream out, BufferedReader in) {
         this.client = client;
         this.out = out;
         this.in = in;
-        this.clientmap = clientmap;
-    }
-    private byte[] uuidToBytes(UUID uuid) {
-        ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[16]);
-        byteBuffer.putLong(uuid.getMostSignificantBits());
-        byteBuffer.putLong(uuid.getLeastSignificantBits());
-        return byteBuffer.array();
     }
 
     @Override
@@ -37,22 +33,26 @@ public class TcpHandlingThread implements Runnable{
             out.write(uuid.toString().getBytes());
             out.write('\n');
             out.flush();
+            log.info("wrote uuid to client");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        while(client.isConnected()) {
+        while(!client.isClosed()) {
             if(clientmap.get(uuid) != null) {
-                Triplet<String,UUID,DatagramPacket> identificationPacket = clientmap.get(uuid);
-                for (Triplet<String,UUID,DatagramPacket> idpacket: clientmap.values()) {
-                    if (idpacket.contains(identificationPacket.getValue0())) {
-                        if(!idpacket.contains(uuid)) {
-                            otherClientIP = idpacket.getValue2().getAddress().getHostAddress();
-                            otherClientPort = String.valueOf(idpacket.getValue2().getPort());
-                            String otherClientInfo = otherClientIP + "&&" + otherClientPort;
+                Quartet<String,UUID,String,String> identificationPacket = clientmap.get(uuid);
+                for (Quartet<String,UUID,String,String> idPacket: clientmap.values()) {
+                    if (idPacket.contains(identificationPacket.getValue0())) {
+                        if(!idPacket.contains(uuid)) {
+                            log.info("found counterpart udp message");
+                            otherClientIP = idPacket.getValue2();
+                            otherClientPort = idPacket.getValue3();
+                            String otherClientInfo = otherClientIP + "&&" + otherClientPort + "&&" + idPacket.getValue1();
                             try {
                                 out.write(otherClientInfo.getBytes());
                                 out.write('\n');
                                 out.flush();
+                                log.info("sent counterpart info back");
+                                client.close();
                             } catch (IOException e) {
                                 throw new RuntimeException();
                             }
@@ -61,6 +61,13 @@ public class TcpHandlingThread implements Runnable{
                 }
             }
         }
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         clientmap.remove(uuid);
+        log.info("removed from map");
+        Thread.currentThread().interrupt();
     }
 }

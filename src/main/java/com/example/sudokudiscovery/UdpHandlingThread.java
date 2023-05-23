@@ -1,34 +1,48 @@
 package com.example.sudokudiscovery;
 
-import org.javatuples.Triplet;
+import lombok.extern.log4j.Log4j2;
+import org.javatuples.Quartet;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
+import static com.example.sudokudiscovery.holePuncher.clientmap;
+
+@Log4j2
 public class UdpHandlingThread implements Runnable{
 
     DatagramSocket dgSocket;
     DatagramPacket dgPacket;
-    Map<UUID, Triplet<String,UUID,DatagramPacket>> cMap;
-    String Msg;
-    public UdpHandlingThread(DatagramPacket datagramPacket, Map<UUID,Triplet<String,UUID,DatagramPacket>> clientmap, DatagramSocket datagramSocket) {
+
+    String msg;
+    Set<UUID> uuidSet;
+    public UdpHandlingThread(DatagramPacket datagramPacket,DatagramSocket datagramSocket) {
         dgPacket = datagramPacket;
-        cMap = clientmap;
+
         dgSocket = datagramSocket;
     }
 
     @Override
     public void run() {
+        uuidSet = new HashSet<>();
         while(true) {
             try {
                 dgSocket.receive(dgPacket);
-                Msg = new String(dgPacket.getData());
-                String[] splitMsg = Msg.split("&&");
+                msg = new String(dgPacket.getData());
+                String[] splitMsg = msg.split("&&");
                 UUID uuid = UUID.fromString(splitMsg[0]);
-                cMap.put(uuid,new Triplet<>(splitMsg[1],uuid,dgPacket));
+                String clientIP = dgPacket.getAddress().getHostAddress();
+                String clientPort = String.valueOf(dgPacket.getPort());
+                if(uuidSet.add(uuid)) {
+                    clientmap.put(uuid,new Quartet<>(splitMsg[1],uuid,clientIP,clientPort));
+                    log.info("put udp message into map");
+                    log.info("written ip is: " + dgPacket.getAddress().getHostAddress());
+                    log.info("Map looks like: " + clientmap);
+                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
